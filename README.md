@@ -74,7 +74,7 @@ Get a local version of this server running with the following steps:
     ```
 
 3.  Create a file named `.env` in the repository's root directory and add the following variables:
-    - `PORT` - defaults to `3000`
+    - `PORT` - defaults to `3030`
     - `DATABASE` - a standard [connection string](https://docs.mongodb.com/manual/reference/connection-string/) to a running MongoDB instance. Read more about setting up MongoDB on your machine [here](https://docs.mongodb.com/manual/).
     ###### Example:
     ```
