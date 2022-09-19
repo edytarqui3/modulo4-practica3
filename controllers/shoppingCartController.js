@@ -4,14 +4,15 @@ const Product = require("../models/Product");
 const User = require("../models/User");
 
 exports.getAllCart = catchAsync(async (req, res) => {
-  const products = await ShopingCart.find();
-
+  const carritos = await ShopingCart.find({
+    status: "PENDING"
+});
   res.status(200).json({
     status: "success",
     timeOfRequest: req.requestTime,
-    results: products.length,
+    results: carritos.length,
     data: {
-      products,
+      carritos,
     },
   });
 });
