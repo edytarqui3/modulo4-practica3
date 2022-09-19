@@ -1,12 +1,10 @@
 const catchAsync = require("../utils/catchAsync");
-const Cart = require('../models/Cart');
-const Product = require('../models/Product');
-const User = require('../models/User');
-const { default: mongoose } = require("mongoose");
-const { find, deleteOne, findOne } = require("../models/Cart");
+const ShopingCart = require("../models/Cart");
+const Product = require("../models/Product");
+const User = require("../models/User");
 
 exports.getAllCart = catchAsync(async (req, res) => {
-  const products = await Cart.find();
+  const products = await ShopingCart.find();
 
   res.status(200).json({
     status: "success",
@@ -18,166 +16,232 @@ exports.getAllCart = catchAsync(async (req, res) => {
   });
 });
 
-// POST /api/v1/cart/pay -- Paga el carrito que este en estado pendiente con minimo un producto en el. Si no existe un carrito con estas caracteristicas se dispara un error
-const addProductToShoppingCart = async (product) => {
-  const newProductOnCart = await Cart.updateOne({$push:{products:product}})
-  return newProductOnCart
-}
+exports.addProductToShoppingCart = catchAsync(async(req, res) => {
 
 
-const checkProducts = async (product)=>{
-    const thereIsProductDB = await Product.findOne(product)
-    if(thereIsProductDB){
-      const addProductOnCart = addProductToShoppingCart(thereIsProductDB)
-      return addProductOnCart
-    }
+  let usuario_autenticado = req.user;
+  let request = req.body;
+  const carritos = await ShopingCart.find({
+      status: "PENDING"
+  });
 
-    const message = "No product in our database to select, add one in get products" 
-    return message
-}
 
-const checkProductsOnCart = async (product, user) =>{
-  const userAunthenticated = await User.find(user)
-  if(userAunthenticated){
-    const checkingCar = await Cart.findOne(product)
-    return checkingCar.products.find(prod => prod.productName == product.productName)
+  if (carritos.length > 0) {
+      let dats_primer_carrito = carritos[0];
+      let id_carrito = dats_primer_carrito.id;
+      let productos_carrito = dats_primer_carrito.products;
+
+      let id_producto_add = request.id_producto;
+
+      let dats_producto = await Product.findById(id_producto_add);
+
+      if (dats_producto) {
+
+          //VERIFICAR SI EL PRODUCTO YA ESTA EL CARRITO DE COMPRAS
+
+          flag_existencia_producto = productos_carrito.findIndex(e => e.id_producto == id_producto_add);
+          if (flag_existencia_producto == -1) { //SI NO EXISTE EL PRODUCT IN CART
+              let nuevo_producto_carrito = {
+                  id_producto: dats_producto.id,
+                  precio_venta: request.precio_venta,
+                  cantidad: request.cantidad,
+              };
+
+              productos_carrito.push(nuevo_producto_carrito);
+
+              let carrito_actualizado = {
+                  user: usuario_autenticado.userName,
+                  status: 'PENDING',
+                  products: productos_carrito
+              }
+
+              const update_carrito = await ShopingCart.findByIdAndUpdate(id_carrito, carrito_actualizado, { new: true });
+
+              res.status(200).json({
+                  status: "Product added successfully",
+                  timeOfRequest: req.requestTime,
+                  results: carritos.length,
+                  data: {
+                      update_carrito,
+                  },
+              });
+          } else {
+
+
+              productos_carrito.map(producto => {
+                  if (producto.id_producto == id_producto_add) {
+                      producto.cantidad = producto.cantidad + 1;
+                  }
+                  return producto;
+              });
+
+
+              let carrito_actualizado = {
+                  user: usuario_autenticado.userName,
+                  status: 'PENDING',
+                  products: productos_carrito
+              }
+
+              const update_carrito = await ShopingCart.findByIdAndUpdate(id_carrito, carrito_actualizado, { new: true });
+
+              res.status(200).json({
+                  status: "The product was already added, the quantity was increased plus 1",
+                  timeOfRequest: req.requestTime,
+                  results: carritos.length,
+                  data: {
+                      update_carrito,
+                  },
+              });
+
+          }
+
+
+      } else {
+          res.status(200).json({
+              status: "Error the product id does not exist",
+              timeOfRequest: req.requestTime
+          });
+      }
+  } else {
+      //CREAR UN CARRITO DE COMPRAS
+
+      let id_producto_add = request.id_producto;
+
+      let dats_producto = await Product.findById(id_producto_add);
+      if (dats_producto) {
+          let nuevo_carrito = {
+              user: usuario_autenticado.userName,
+              status: 'PENDING',
+              products: [{
+                  id_producto: dats_producto.id,
+                  precio_venta: request.precio_venta,
+                  cantidad: request.cantidad
+              }]
+          }
+
+          const newCarrito = await ShopingCart.create(nuevo_carrito);
+
+          res.status(200).json({
+              status: "Cart successfully created and product added",
+              timeOfRequest: req.requestTime,
+              results: carritos.length,
+              data: {
+                  newCarrito,
+              },
+          });
+      } else {
+          res.status(200).json({
+              status: "Error the product id does not exist",
+              timeOfRequest: req.requestTime
+          });
+      }
+
+
   }
-
-}
-
-const createShoppingCart = async (user, product) => {
-  const createCart = await Cart.create({user:user.userName, status:"PENDING", products:product})
-  return createCart
-}
-
-const existShoppingCart = async (user, product)=>{
-  const foundShoppingCart = await Cart.find({a:1})
-  if(foundShoppingCart == ''){
-    return createShoppingCart(user, product)
-  }else{
-    return checkProductsOnCart(product, user)
-  }
-}
-
-exports.addProductToShoppingCart = catchAsync(async (req, res) => {
-
-    const userProduct = req.body;
-    const user = req.user;
-    let message = "";
-
-    await existShoppingCart(user, userProduct);
-
-    const product = await checkProductsOnCart(userProduct, user);
-    if(product){
-      message = "Ya existe ese producto en tu carrito de compras"
-      res.status(200).json({
-        message: message,
-        status: "succes",
-        user: user.userName,
-        data: {
-          product
-        },
-      });
-
-    }else{
-      message = "No tienes ese producto en tu carrito. Agregaremos el producto si se encuentra en la base de datos"
-      
-      const getCheckProducts = await checkProducts(userProduct)
-      const modifyingData = getCheckProducts.modifiedCount
-      
-      if(typeof(getCheckProducts) == String){
-        message = addedProduct
-        res.status(400).json({
-          message: message,
-          status: "fail"
-        })
-      }else{
-        res.status(200).json({
-          message: message,
-          status: "success",
-          user: user.userName,
-          documentModified: modifyingData,
-          statusCart:"PENDING",
-        });    
-      } 
-    }
 });
 
-const changeCartStatus = async (user, cartStatus, statusByUser) => {
-  const searchingUser = await Cart.findOne({user})
-  const getUserStatus = statusByUser.status
-  if(searchingUser.user == user && cartStatus == "PENDING"){
-    const changingStatus = await Cart.updateOne({status: 'PAID'})
-    return changingStatus
+exports.deleteShoppingCart = catchAsync(async(req, res) => {
+
+  let usuario_autenticado = req.user;
+
+  const carritos = await ShopingCart.find({
+      status: "PENDING"
+  });
+
+  if (carritos.length > 0) {
+      let dats_primer_carrito = carritos[0];
+      let id_carrito = dats_primer_carrito.id;
+      let id_producto_delete = req.params.id;
+
+      const productos_carrito = dats_primer_carrito.products;
+
+      let posicion_producto_delete = productos_carrito.findIndex(producto => producto.id_producto == id_producto_delete);
+
+      if (posicion_producto_delete >= 0) {
+          productos_carrito.splice(posicion_producto_delete, 1);
+
+          let carrito_actualizado = {
+              user: usuario_autenticado.userName,
+              status: 'PENDING',
+              products: productos_carrito
+          };
+
+          const update_carrito = await ShopingCart.findByIdAndUpdate(id_carrito, carrito_actualizado, { new: true });
+
+          res.status(200).json({
+              status: "The product was removed from the cart",
+              timeOfRequest: req.requestTime,
+              results: carritos.length,
+              data: {
+                  update_carrito,
+              },
+          });
+
+      } else {
+          res.status(400).json({
+              status: "The product does not exist in the cart",
+              timeOfRequest: req.requestTime,
+          });
+      }
+  } else {
+      res.status(400).json({
+          status: "There are no carts with pending status",
+          timeOfRequest: req.requestTime,
+      });
   }
-}
+
+
+});
+
+
 
 exports.payShoppingCart = catchAsync(async(req, res) => {
-    const {userName} = req.user
-    const statusModifiedByUser = 'PAID'//req.body
 
-    const checkingCar = await Cart.find({a:1})
-    
-    if(checkingCar != null){
-      const userCart = checkingCar.find(userCart => userCart.user == userName)
-      await changeCartStatus(userName,userCart.status, statusModifiedByUser);
-      const productPrice = await Cart.findOne().select('products');
-      const totalPrice = await productPrice.products.reduce((prevPrice, nextPrice) => parseFloat(prevPrice.price + nextPrice.price));
-      
-      res.status(200).json({
-        message:"if your status is pending you must change it to pay",
-        user: userName,
-        status: userCart.status,
-        products: productPrice,
-        totalPrice: totalPrice,
-      });  
-    }else{
-      res.status(200).json({
-        message:"the status is pending, if you want to continue must change the status to pay",
-        status: "fail",
-      });  
-    }
-});
+  let usuario_autenticado = req.user;
+
+  const carritos = await ShopingCart.find({
+      status: "PENDING"
+  });
+
+  if (carritos.length > 0) {
+      let dats_primer_carrito = carritos[0];
+      let id_carrito = dats_primer_carrito.id;
+
+      const productos_carrito = dats_primer_carrito.products;
+
+      if (productos_carrito.length > 0) {
+
+          let carrito_actualizado = {
+              user: usuario_autenticado.userName,
+              status: 'PAID',
+              products: productos_carrito
+          }
+
+          const update_carrito = await ShopingCart.findByIdAndUpdate(id_carrito, carrito_actualizado, { new: true });
+
+          res.status(200).json({
+              status: "Cart paid successfully",
+              timeOfRequest: req.requestTime,
+              results: carritos.length,
+              data: {
+                  update_carrito,
+              },
+          });
 
 
-async function searchProduct(productId){
-    const findCart = await Cart.find().select('products')
-    const productFound = findCart[0].products.find(prod => prod.productId == productId)
-    if(productFound){
-      return productFound
-    }else{
-      let message = "Ocurrio un error"
-      return message
-    }
-}
+      } else {
+          res.status(400).json({
+              status: "The cart has no products loaded",
+              timeOfRequest: req.requestTime,
+          });
+      }
 
-exports.deleteShoppingCart = catchAsync(async (req, res) => {
-  const id = req.params.id
-  const {userName} = req.user
-  const product = await searchProduct(id)
-
-  if(typeof(product) == String){
-    res.status(200).json({
-      message: product,
-      status: "success",
-      user: userName,
-    });  
-  }else{
-    const statusCart = await Cart.find().select('status')
-    if(statusCart[0].status == "PENDING"){
-      const eraseFile = await Cart.updateOne({$pull: {products: product}})
-      const {acknowledged, modifiedCount} = eraseFile
-      res.status(200).json({
-        message: "cart",
-        user: userName,
-        status:statusCart[0].status,
-      }); 
-    }else{
-      res.status(200).json({
-        message: "cart no add product because status changed to PAID",
-        status:"error",
-      }); 
-    }
-       
+  } else {
+      res.status(400).json({
+          status: "There are no carts with pending status",
+          timeOfRequest: req.requestTime,
+      });
   }
+
+
 });

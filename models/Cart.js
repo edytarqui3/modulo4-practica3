@@ -1,35 +1,18 @@
 const mongoose = require("mongoose");
-const shoppingCartSchema = new mongoose.Schema(
-  /*{
-    user: { type: String, required: true },
-    status: { type: String,default: 'PENDING'},
-    products: [
-      {
-        productId: {
-          type: String,
-        },
-        quantity: {
-          type: Number,
-          default: 1,
-        },
-      }],
-  },
-  { timestamps: true }*/
-  {
+const shoppingCartSchema = new mongoose.Schema({
   user: {
-    type: String,
-    required: true,
-    unique: true,
+      type: String,
+      required: true,
   },
   status: {
-    type: String,
-    default: 'PENDING'
+      type: String,
+      required: true,
   },
   products: {
-    type: [],
-    required: true
+      type: [],
+      required: true
   },
-} );
+});
 
-const shoppingCart = mongoose.model("Cart", shoppingCartSchema);
+const shoppingCart = mongoose.model("Carts", shoppingCartSchema);
 module.exports = shoppingCart;
