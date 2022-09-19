@@ -257,16 +257,8 @@ sino damos error
 ![Ejecucion](cart_paid.PNG)
 
 ---
-### Deployment
+El modelo de shoping cart tendra al menos los siguientes atributos:
 
-    en el ejemplo usasermos users
-
-```sh
-npm run dev
-```
-ejecucion de codigo la salida es la siguiente:
-  ![Ejecucion](user_login.PNG)
-
-You can quickly deploy your own version with Heroku using this button.
-
-[![Deploy](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy)
+user: El usuario que realiza la compra
+status: PENDING o PAID
+products: un array o una tabla con id del producto, precio de venta  y cantidad
